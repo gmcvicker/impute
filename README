@@ -1,0 +1,53 @@
+# This directory contains scripts for imputing HapMap SNPs 
+# using 1000 genomes as a reference panel. 
+#  
+# Many of the scripts need to be editted slightly to change
+# the population that is used (e.g. CEU or YRI).
+#
+#
+# Workflow is as follows:
+
+# make file of parental samples (first 60 are parents, 
+# last 30 children)
+#gunzip -c  /data/share/HapMap/phasing/r22/2008-12-16/genotypes_chr9_CEU_r22_nr.b36_fwd_sample.txt.gz | head -60 > /data/share/10_IND/IMPUTE/CEU_samples.txt
+
+gunzip -c  /data/share/HapMap/phasing/r22/2008-12-16/genotypes_chr9_CEU_r22_nr.b36_fwd_sample.txt.gz  > /data/share/10_IND/IMPUTE/CEU_samples.txt
+
+
+# create pre-phased haplotype files from HapMap phase2 r22 output
+qsub run_make_haplotype_file.sh
+
+
+# Liftover HapMap genotypes from hg18 => hg19
+# Sort and filter SNPs that mapped to different strand or chromosome
+# on hg19. Also discard SNPs with ordering that is inconsistent between
+# hg18 and hg19. Convert BED file back to haplotype format.
+qsub liftover_hapmap_genotypes.sh
+
+
+# Make tasklist file containing list of regions we
+# want to run IMPUTE on
+python python/make_impute2_tasklist.py hg19 > /KG/gmcvicker/IMPUTE/tasklist.hg19.txt
+
+# Run IMPUTE2
+qsub run_impute2.sh
+
+# combine the output into a single file per chromosome
+./combine_impute_output.sh
+
+# convert output back to hg18 from hg19
+# first change TYPE variable in script so that 
+# this can be run on impute2 output files, and/or on
+# impute2_haps output files
+# 
+qsub liftover_impute_output.sh
+
+
+###generate vcf files from impute2_haps files
+###qsub run_impute2vcf.sh
+
+# convert haplotypes and geno_probs to HDF5 format
+ python import_genos.py  haplotypes  /impute2/YRI_haploypes /data/internal/genotypes/hg19/YRI/
+ 
+ python import_genos.py  geno_probs  /impute2/YRI_geno_probs /data/internal/genotypes/hg19/YRI/
+
